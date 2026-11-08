@@ -3,7 +3,7 @@
 # Rode com o seu usuário (não como root) em cada um dos 4 nós, depois que o
 # setup terminar:   /local/repository/build-mu.sh
 # O README clona osdi2020-no-152/dory (repositório que não existe mais); o
-# mesmo código está em LPD-EPFL/mu, que o profile clona em /local/mu.
+# mesmo código está em LPD-EPFL/mu; o profile clona o fork joaogularte/mu em /local/mu.
 set -e
 MU="${MU_DIR:-/local/mu}"
 cd "$MU"

@@ -96,7 +96,7 @@ fi
 
 # 6) Código do Mu
 if [ "$CLONE_MU" = "1" ] && [ ! -d /local/mu ]; then
-  git clone https://github.com/LPD-EPFL/mu.git /local/mu && chmod -R a+rwX /local/mu
+  git clone https://github.com/joaogularte/mu.git /local/mu && chmod -R a+rwX /local/mu
 fi
 
 # 7) Descobre device/porta/GID da rede de experimento e grava /local/rdma.env

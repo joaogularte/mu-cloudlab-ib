@@ -47,7 +47,7 @@ pc.defineParameter(
     "pinKernel", "Tentar fixar o kernel 4.15.0-72-generic (versao do artigo)",
     portal.ParameterType.BOOLEAN, True)
 pc.defineParameter(
-    "cloneMu", "Clonar LPD-EPFL/mu em /local/mu", portal.ParameterType.BOOLEAN, True)
+    "cloneMu", "Clonar joaogularte/mu em /local/mu", portal.ParameterType.BOOLEAN, True)
 
 params = pc.bindParameters()
 if params.nodeCount < 4:
