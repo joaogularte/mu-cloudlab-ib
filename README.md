@@ -24,6 +24,15 @@ FDR 56 Gbps), Ubuntu 18.04 e Mellanox OFED 4.7-3.2.9.0.
 O tráfego RDMA do Mu vai direto pela porta InfiniBand (endereçado por LID). A LAN
 Ethernet `10.10.1.0/24` é usada só para TCP: o registro memcached e os clientes.
 
+### Sem Docker
+
+O README do Mu descreve uma implantação com Docker em modo swarm, mas avisa que,
+para ter o melhor desempenho, é preciso evitar o Docker e rodar nativamente (seção
+*Running without docker*). Este profile segue esse caminho: **o Docker não é
+instalado**. O Dockerfile do Mu serve só como lista de dependências, que o
+`setup.sh` instala direto em cada nó. Os containers `osdi-node-1..4` correspondem
+a `node0..node3` e o container `osdi-memc` ao memcached do `node3`.
+
 ---
 
 ## Passos após a criação do experimento
