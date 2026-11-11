@@ -106,8 +106,8 @@ source ~/.bashrc
 ```
 
 O script configura o perfil do Conan e compila o `crash-consensus` e a demo
-`using_conan_fully`, que gera os binários do Mu standalone (`main-st` e
-`main-st-lat`, em `/local/mu/crash-consensus/demo/using_conan_fully/build/bin`).
+`using_conan_fully`, que gera os binários do Mu standalone (`main-st`,
+`main-st-lat` e `main-failover`, em `/local/mu/crash-consensus/demo/using_conan_fully/build/bin`).
 Os experimentos com Redis, Memcached e Liquibook não são compilados. O script
 também adiciona `source /local/rdma.env` ao `~/.bashrc`.
 
@@ -145,10 +145,35 @@ numactl --cpunodebind=$RDMA_NUMA --membind=$RDMA_NUMA \
   ib_write_lat -d $RDMA_DEV -i $RDMA_PORT -s 64 -n 100000 10.10.1.2
 ```
 
-### 6. Iniciar o registro e rodar os experimentos
+### 6. Rodar os experimentos do artigo
 
-O `setup.sh` para o serviço `memcached` do sistema de propósito, porque o
-registro do Mu é iniciado à mão no `node3`:
+Os experimentos de latência (Seção 7.1), fail-over (7.3) e throughput (7.4) têm
+scripts no fork, em
+[`crash-consensus/experiments/paper`](https://github.com/joaogularte/mu/tree/master/crash-consensus/experiments/paper).
+Eles rodam no `node3` e controlam as réplicas por SSH. Eles também iniciam o
+registro memcached e definem `DORY_REGISTRY_IP`, então **não** é preciso fazer
+o passo 7.
+
+Conecte no `node3` com `ssh -A`, para que ele entre nas réplicas sem senha, e
+confira o ambiente:
+
+```bash
+cd /local/mu/crash-consensus/experiments/paper
+./preflight.sh
+```
+
+Corrija tudo o que aparecer como `FAIL`. Depois siga o
+[README dos scripts](https://github.com/joaogularte/mu/tree/master/crash-consensus/experiments/paper#running)
+(`run-latency.sh`, `run-failover.sh`, `run-throughput.sh`).
+
+> Se o `/local/mu` foi clonado antes de os scripts entrarem no fork, rode
+> `git -C /local/mu pull` e o `build-mu.sh` de novo nos 4 nós.
+
+### 7. Rodar outros experimentos à mão
+
+Para os demais experimentos do README do Mu, o registro é iniciado à mão no
+`node3`. O `setup.sh` para o serviço `memcached` do sistema de propósito, para
+não ocupar a porta:
 
 ```bash
 # node3
