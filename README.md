@@ -10,7 +10,7 @@ FDR 56 Gbps), Ubuntu 18.04 e Mellanox OFED 4.7-3.2.9.0.
 | [setup.sh](setup.sh) | Instala kernel, pacotes, OFED, ajusta o sistema e clona o Mu (roda a cada boot) |
 | [rdma-info.sh](rdma-info.sh) | Descobre o device/porta RDMA correto e grava `/local/rdma.env` |
 | [check-net.sh](check-net.sh) | Testa a conectividade entre os nós |
-| [build-mu.sh](build-mu.sh) | Compila o Mu e os experimentos |
+| [build-mu.sh](build-mu.sh) | Compila o Mu standalone |
 
 ## Topologia
 
@@ -105,11 +105,11 @@ Com o **seu usuário** (não como root):
 source ~/.bashrc
 ```
 
-O script configura o perfil do Conan, compila o `crash-consensus`, a demo e os
-experimentos (incluindo o Liquibook) e adiciona ao `~/.bashrc`:
-
-- `LD_LIBRARY_PATH` apontando para `/local/mu/crash-consensus/experiments/exported`;
-- `source /local/rdma.env`.
+O script configura o perfil do Conan e compila o `crash-consensus` e a demo
+`using_conan_fully`, que gera os binários do Mu standalone (`main-st` e
+`main-st-lat`, em `/local/mu/crash-consensus/demo/using_conan_fully/build/bin`).
+Os experimentos com Redis, Memcached e Liquibook não são compilados. O script
+também adiciona `source /local/rdma.env` ao `~/.bashrc`.
 
 Abra um novo shell (ou rode `source ~/.bashrc`) antes de seguir.
 
@@ -165,6 +165,7 @@ marcador correspondente e rode o script com os mesmos argumentos do profile
 |---|---|
 | `/local/.mu-kernel` | Instalação do kernel e reboot |
 | `/local/.mu-pkgs` | Pacotes, gtest e Conan |
+| `/local/.mu-cmake` | CMake 3.27.9 em `/opt/cmake` |
 | `/local/.mu-ofed` | Mellanox OFED |
 
 ```bash
@@ -195,3 +196,8 @@ sudo /local/repository/rdma-info.sh ib
   atual. O OFED é recompilado para ele se preciso.
 - **`build-mu.sh` falhou no Conan**: o build usa perfis do Conan 1.x. Confira com
   `conan --version` que a versão é menor que 2.
+- **`The 'CMakeToolchain' generator only works with CMake >= 3.15`** (ao compilar
+  `fmt` ou `spdlog`): o `cmake` em uso é o 3.10 do Ubuntu 18.04. O `setup.sh`
+  instala o CMake 3.27.9 em `/usr/local/bin` (marcador `/local/.mu-cmake`).
+  Confira com `which cmake && cmake --version`; se ainda for o 3.10, veja a
+  linha "CMake" em `/local/setup.log` e rode o setup de novo.

@@ -55,6 +55,23 @@ if [ ! -e "$M-pkgs" ]; then
   touch "$M-pkgs"
 fi
 
+# 2b) CMake mais novo: o Ubuntu 18.04 traz o 3.10, mas as receitas atuais do
+#     ConanCenter (fmt, spdlog) usam CMakeToolchain, que exige CMake >= 3.15.
+#     Fica no 3.x porque o CMake 4 rejeita o cmake_minimum_required antigo delas.
+CMAKE_VER=3.27.9
+if [ ! -e "$M-cmake" ]; then
+  CMAKE_TGZ="/local/cmake-${CMAKE_VER}-linux-x86_64.tar.gz"
+  if wget -q "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VER}/cmake-${CMAKE_VER}-linux-x86_64.tar.gz" -O "$CMAKE_TGZ" \
+     && rm -rf /opt/cmake && mkdir -p /opt/cmake \
+     && tar xzf "$CMAKE_TGZ" -C /opt/cmake --strip-components=1; then
+    ln -sf /opt/cmake/bin/cmake /opt/cmake/bin/ctest /opt/cmake/bin/cpack /usr/local/bin/
+    log "CMake $(/usr/local/bin/cmake --version | head -1) em /usr/local/bin"
+    touch "$M-cmake"
+  else
+    log "AVISO: instalação do CMake $CMAKE_VER falhou"
+  fi
+fi
+
 # 3) Mellanox OFED (padrão: 4.7-3.2.9.0, a versão do artigo; inclui perftest)
 if [ ! -e "$M-ofed" ]; then
   cd /local
