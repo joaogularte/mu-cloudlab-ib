@@ -117,16 +117,32 @@ Abra um novo shell (ou rode `source ~/.bashrc`) antes de seguir.
 
 Serve para comparar este ambiente com o do artigo e com o profile RoCE.
 
+Antes de medir, coloque o governor em `performance` no `node0` e no `node1`.
+O `setup.sh` já faz isso no boot, mas o ajuste pode ter sido desfeito depois
+(por exemplo, pelo serviço `ondemand` do Ubuntu):
+
+```bash
+for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+  echo performance | sudo tee "$g" >/dev/null
+done
+```
+
+Rode o teste com `numactl`, fixando CPU e memória no nó NUMA da NIC
+(`$RDMA_NUMA`, de `/local/rdma.env`). Sem isso, cada processo pode cair no
+socket errado e a latência muda de uma execução para outra.
+
 No `node1` (servidor):
 
 ```bash
-ib_write_lat -d $RDMA_DEV -i $RDMA_PORT -s 64 -n 100000
+numactl --cpunodebind=$RDMA_NUMA --membind=$RDMA_NUMA \
+  ib_write_lat -d $RDMA_DEV -i $RDMA_PORT -s 64 -n 100000
 ```
 
 No `node0` (cliente):
 
 ```bash
-ib_write_lat -d $RDMA_DEV -i $RDMA_PORT -s 64 -n 100000 10.10.1.2
+numactl --cpunodebind=$RDMA_NUMA --membind=$RDMA_NUMA \
+  ib_write_lat -d $RDMA_DEV -i $RDMA_PORT -s 64 -n 100000 10.10.1.2
 ```
 
 ### 6. Iniciar o registro e rodar os experimentos
