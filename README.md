@@ -154,8 +154,39 @@ Eles rodam no `node3` e controlam as réplicas por SSH. Eles também iniciam o
 registro memcached e definem `DORY_REGISTRY_IP`, então **não** é preciso fazer
 o passo 7.
 
-Conecte no `node3` com `ssh -A`, para que ele entre nas réplicas sem senha, e
-confira o ambiente:
+#### SSH do `node3` para as réplicas
+
+Os scripts usam `ssh -o BatchMode=yes`, que não pede senha. Por isso o `node3`
+precisa de uma chave aceita pelas réplicas; sem ela, o preflight mostra
+`Permission denied (publickey)` e `FAIL: cannot SSH into 10.10.1.x`.
+
+Crie uma chave no `node3`:
+
+```bash
+# node3
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
+cat ~/.ssh/id_ed25519.pub
+```
+
+Em cada réplica (`node0`, `node1`, `node2`), adicione a linha mostrada:
+
+```bash
+echo '<linha do id_ed25519.pub>' >> ~/.ssh/authorized_keys
+```
+
+Teste no `node3`:
+
+```bash
+for h in 10.10.1.1 10.10.1.2 10.10.1.3; do ssh -o BatchMode=yes "$h" hostname; done
+```
+
+> **Alternativa:** conectar no `node3` com `ssh -A`, para repassar a chave do seu
+> computador. Ela só é repassada se estiver carregada no agente (confira com
+> `ssh-add -l` no seu computador e no `node3`). Dentro de uma sessão `tmux`
+> criada antes da conexão, o agente não fica visível. A chave própria do `node3`
+> não depende disso, o que é mais seguro para execuções longas.
+
+#### Conferir o ambiente
 
 ```bash
 cd /local/mu/crash-consensus/experiments/paper
