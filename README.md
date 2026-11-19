@@ -11,6 +11,7 @@ FDR 56 Gbps), Ubuntu 18.04 e Mellanox OFED 4.7-3.2.9.0.
 | [rdma-info.sh](rdma-info.sh) | Descobre o device/porta RDMA correto e grava `/local/rdma.env` |
 | [check-net.sh](check-net.sh) | Testa a conectividade entre os nós |
 | [build-mu.sh](build-mu.sh) | Compila o Mu standalone |
+| [qp-flags-bench.c](qp-flags-bench.c) | Mede a latência da troca de flags de acesso de um QP |
 
 ## Topologia
 
@@ -145,14 +146,128 @@ numactl --cpunodebind=$RDMA_NUMA --membind=$RDMA_NUMA \
   ib_write_lat -d $RDMA_DEV -i $RDMA_PORT -s 64 -n 100000 10.10.1.2
 ```
 
-### 6. Rodar os experimentos do artigo
+### 6. Medir a troca de QP flags (recomendado)
+
+Na troca de líder, o Mu tira a permissão de escrita do líder antigo e dá ao novo
+com `ibv_modify_qp(..., IBV_QP_ACCESS_FLAGS)` (`changeRights`, em
+`conn/src/rc.cpp`). Essa chamada faz parte da métrica `permissions` do
+`run-failover.sh`. O `qp-flags-bench` mede só essa chamada, sem o resto do
+protocolo, para separar o custo da NIC e do driver do custo de comunicação.
+
+No fail-over, quem faz as duas trocas no caminho crítico é o seguidor (`node2`):
+ele revoga a escrita no QP do líder antigo e, logo em seguida, concede no QP do
+novo líder. O artigo conta essas duas trocas dentro do tempo de troca de
+permissão (Seção 7.3).
+
+O teste roda em **um nó só** (use o `node2`). Ele cria dois QPs RC ligados entre
+si na mesma NIC (loopback) e leva os dois a RTS. Cada iteração repete o que o
+seguidor faz: revoga em um QP (`LOCAL_WRITE`) e concede no outro
+(`LOCAL_WRITE | REMOTE_READ | REMOTE_WRITE`), as mesmas flags do Mu. Na
+iteração seguinte os papéis dos dois QPs se invertem, então toda troca muda as
+flags de fato.
+
+Compile:
+
+```bash
+gcc -O2 -Wall -o ~/qp-flags-bench /local/repository/qp-flags-bench.c -libverbs
+```
+
+Rode com o governor em `performance` (veja o passo 5), fixando CPU e memória no
+nó NUMA da NIC:
+
+```bash
+numactl --cpunodebind=$RDMA_NUMA --membind=$RDMA_NUMA \
+  ~/qp-flags-bench -d $RDMA_DEV -i $RDMA_PORT -n 10000 -o ~/qp-flags-samples.txt \
+  | tee ~/qp-flags-performance.csv
+```
+
+A saída tem o mesmo formato do `summary.csv` do fail-over:
+
+```
+metric,samples,p1_ns,p50_ns,p99_ns,mean_ns,max_ns
+revoke,10000,...
+grant,10000,...
+pair,10000,...
+```
+
+| Linha | O que mede |
+|---|---|
+| `revoke` | Uma chamada sozinha: revogar a escrita no QP do líder antigo |
+| `grant` | Uma chamada sozinha: conceder a escrita no QP do novo líder |
+| `pair` | As duas seguidas, do início do revoke ao fim do grant |
+
+Compare o `pair` com o tempo de troca de permissão do artigo e com a linha
+`permissions` do fail-over. Os percentis do `pair` não são a soma dos percentis
+de `revoke` e `grant`: só a média soma. O `pair` também mostra se uma troca logo
+depois da outra custa mais que as duas sozinhas.
+
+Opções:
+
+| Opção | Padrão | Significado |
+|---|---|---|
+| `-n` | `10000` | Pares medidos |
+| `-w` | `100` | Pares de aquecimento, descartados |
+| `-g` | `0` | Espera ativa (µs) antes de cada par (fora da medição) |
+| `-o` | — | Grava cada par (`revoke_ns grant_ns pair_ns`) em um arquivo |
+| `-x` | — | Índice de GID, obrigatório só em RoCE (`$RDMA_GID_INDEX`) |
+
+Com `-g 0` os pares são seguidos e a NIC e os núcleos ficam "quentes". Para
+algo mais parecido com o fail-over, em que a troca acontece depois de um tempo
+sem comandos para a NIC, rode também com `-g 1000`. Dentro do par não há espera
+em nenhum caso, como no Mu.
+
+#### Efeito do governor e dos C-states
+
+Cada `ibv_modify_qp` passa pelo kernel e pelo driver `mlx4`, que envia um
+comando ao firmware da NIC e espera a interrupção de conclusão. A parte do
+kernel depende da frequência da CPU (governor). A espera pela interrupção
+depende de quanto tempo o núcleo que a recebe demora para sair do estado de
+repouso (C-states). Para separar os dois efeitos, mude um de cada vez e compare
+os CSVs:
+
+```bash
+# 1) governor powersave (C-states como estão)
+for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+  echo powersave | sudo tee "$g" >/dev/null
+done
+numactl --cpunodebind=$RDMA_NUMA --membind=$RDMA_NUMA \
+  ~/qp-flags-bench -d $RDMA_DEV -i $RDMA_PORT -n 10000 -g 1000 \
+  | tee ~/qp-flags-powersave.csv
+
+# 2) governor performance, C-states profundos desligados (state0 é POLL)
+for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+  echo performance | sudo tee "$g" >/dev/null
+done
+for s in /sys/devices/system/cpu/cpu*/cpuidle/state[1-9]*/disable; do
+  echo 1 | sudo tee "$s" >/dev/null
+done
+numactl --cpunodebind=$RDMA_NUMA --membind=$RDMA_NUMA \
+  ~/qp-flags-bench -d $RDMA_DEV -i $RDMA_PORT -n 10000 -g 1000 \
+  | tee ~/qp-flags-no-cstates.csv
+
+# Religar os C-states
+for s in /sys/devices/system/cpu/cpu*/cpuidle/state[1-9]*/disable; do
+  echo 0 | sudo tee "$s" >/dev/null
+done
+```
+
+Para comparar com essas duas execuções, rode também a de referência com
+`-g 1000` (governor `performance`, C-states ligados).
+
+> Se `/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor` não existir, o
+> cpufreq está desligado na BIOS e o governor não tem efeito. Nesse caso só a
+> comparação dos C-states faz sentido. Para ver a frequência real e o tempo em
+> cada C-state durante o teste, rode `sudo turbostat --quiet --interval 1` em
+> outro terminal.
+
+### 7. Rodar os experimentos do artigo
 
 Os experimentos de latência (Seção 7.1), fail-over (7.3) e throughput (7.4) têm
 scripts no fork, em
 [`crash-consensus/experiments/paper`](https://github.com/joaogularte/mu/tree/master/crash-consensus/experiments/paper).
 Eles rodam no `node3` e controlam as réplicas por SSH. Eles também iniciam o
 registro memcached e definem `DORY_REGISTRY_IP`, então **não** é preciso fazer
-o passo 7.
+o passo 8.
 
 #### SSH do `node3` para as réplicas
 
@@ -200,7 +315,7 @@ Corrija tudo o que aparecer como `FAIL`. Depois siga o
 > Se o `/local/mu` foi clonado antes de os scripts entrarem no fork, rode
 > `git -C /local/mu pull` e o `build-mu.sh` de novo nos 4 nós.
 
-### 7. Rodar outros experimentos à mão
+### 8. Rodar outros experimentos à mão
 
 Para os demais experimentos do README do Mu, o registro é iniciado à mão no
 `node3`. O `setup.sh` para o serviço `memcached` do sistema de propósito, para
