@@ -11,6 +11,7 @@ FDR 56 Gbps), Ubuntu 18.04 e Mellanox OFED 4.7-3.2.9.0.
 | [rdma-info.sh](rdma-info.sh) | Descobre o device/porta RDMA correto e grava `/local/rdma.env` |
 | [check-net.sh](check-net.sh) | Testa a conectividade entre os nós |
 | [build-mu.sh](build-mu.sh) | Compila o Mu standalone |
+| [rdma-lat.sh](rdma-lat.sh) | Repete o `ib_write_lat` entre dois nós e grava os resultados em `~/mu-results/rdma-lat` |
 | [qp-flags-bench.c](qp-flags-bench.c) | Mede a latência da troca de flags de acesso de um QP |
 
 ## Topologia
@@ -128,23 +129,51 @@ for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
 done
 ```
 
-Rode o teste com `numactl`, fixando CPU e memória no nó NUMA da NIC
-(`$RDMA_NUMA`, de `/local/rdma.env`). Sem isso, cada processo pode cair no
-socket errado e a latência muda de uma execução para outra.
+O `rdma-lat.sh` roda o `ib_write_lat` várias vezes seguidas, para mostrar a
+variação de uma execução para outra. Cada execução usa `numactl`, fixando CPU e
+memória no nó NUMA da NIC (`$RDMA_NUMA`, de `/local/rdma.env`). Sem isso, cada
+processo pode cair no socket errado e a latência muda de uma execução para
+outra.
 
-No `node1` (servidor):
-
-```bash
-numactl --cpunodebind=$RDMA_NUMA --membind=$RDMA_NUMA \
-  ib_write_lat -d $RDMA_DEV -i $RDMA_PORT -s 64 -n 100000
-```
-
-No `node0` (cliente):
+Inicie primeiro o servidor, no `node1`:
 
 ```bash
-numactl --cpunodebind=$RDMA_NUMA --membind=$RDMA_NUMA \
-  ib_write_lat -d $RDMA_DEV -i $RDMA_PORT -s 64 -n 100000 10.10.1.2
+/local/repository/rdma-lat.sh server 5
 ```
+
+Depois o cliente, no `node0`, com o mesmo número de execuções:
+
+```bash
+/local/repository/rdma-lat.sh client 10.10.1.2 5
+```
+
+O padrão é 5 execuções de 100000 iterações com mensagens de 64 bytes. Para
+mudar, use `SIZE` e `ITERS` nos dois nós (por exemplo,
+`SIZE=32 ITERS=1000000 /local/repository/rdma-lat.sh server 10`). O script
+avisa se o governor da `cpu0` não for `performance`.
+
+Os resultados ficam em `~/mu-results/rdma-lat`, no mesmo formato dos scripts do
+passo 7:
+
+| Arquivo | Nó | Conteúdo |
+|---|---|---|
+| `client-<n>.log` | `node0` | Saída completa do `ib_write_lat` na execução `n` |
+| `server-<n>.log` | `node1` | Saída do lado servidor na execução `n` |
+| `summary.csv` | `node0` | Uma linha por execução, com as colunas do `ib_write_lat` |
+
+```
+run,bytes,iterations,t_min_us,t_max_us,t_typical_us,t_avg_us,t_stdev_us,p99_us,p99.9_us
+1,64,100000,...
+2,64,100000,...
+```
+
+Os valores estão em µs e já são metade do tempo de ida e volta, como o
+`ib_write_lat` reporta. O `t_typical_us` é a mediana. Cada nova chamada apaga os
+logs e o `summary.csv` anteriores; para guardar uma rodada, copie a pasta ou
+use outra `RESULTS_DIR` (por exemplo, `RESULTS_DIR=~/mu-results-powersave`).
+
+> Se uma execução do cliente falhar (o script tenta conectar por até 10 s), o
+> servidor fica esperando um cliente a mais. Encerre-o com `Ctrl-C`.
 
 ### 6. Medir a troca de QP flags (recomendado)
 
