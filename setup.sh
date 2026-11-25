@@ -96,6 +96,11 @@ for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
   [ -w "$g" ] && echo performance > "$g"
 done
 systemctl stop irqbalance 2>/dev/null || true
+# vim como editor padrão: a alternativa `editor` (sensible-editor, crontab -e)
+# e EDITOR/VISUAL (git, sudoedit) nos shells de login
+update-alternatives --set editor /usr/bin/vim.basic >/dev/null 2>&1 || \
+  log "AVISO: não foi possível definir o vim como editor padrão"
+printf 'export EDITOR=vim\nexport VISUAL=vim\n' > /etc/profile.d/editor.sh
 systemctl stop memcached 2>/dev/null || true   # o registro do Mu é iniciado no último nó (cliente)
 # eRPC (usado no experimento Liquibook) exige hugepages em todos os nós NUMA
 for h in /sys/devices/system/node/node*/hugepages/hugepages-2048kB/nr_hugepages; do
