@@ -1,6 +1,6 @@
 #!/bin/bash
 # Compila o Mu seguindo o README (seção "Compilation of the software stack").
-# Rode com o seu usuário (não como root) em cada um dos 4 nós, depois que o
+# Rode com o seu usuário (não como root) em cada réplica, depois que o
 # setup terminar:   /local/repository/build-mu.sh
 # O README clona osdi2020-no-152/dory (repositório que não existe mais); o
 # mesmo código está em LPD-EPFL/mu; o profile clona o fork joaogularte/mu em /local/mu.

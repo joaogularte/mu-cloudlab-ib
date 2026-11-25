@@ -344,6 +344,63 @@ Corrija tudo o que aparecer como `FAIL`. Depois siga o
 > Se o `/local/mu` foi clonado antes de os scripts entrarem no fork, rode
 > `git -C /local/mu pull` e o `build-mu.sh` de novo nos 4 nós.
 
+#### Fail-over com mais réplicas (12 nós)
+
+Para medir o fail-over com 3, 5, 7, 9 e 11 réplicas, crie o experimento com
+`nodeCount = 12`. O último nó é sempre o cliente:
+
+| Nó | IP de experimento | Papel |
+|---|---|---|
+| `node0` | `10.10.1.1` | Réplica 1: o líder que é pausado |
+| `node1` | `10.10.1.2` | Réplica 2: assume a liderança; é onde se mede |
+| `node2`..`node10` | `10.10.1.3`..`10.10.1.11` | Réplicas 3..11 |
+| `node11` | `10.10.1.12` | Cliente + registro memcached (`10.10.1.12:9999`) |
+
+Com n réplicas, o experimento usa `node0..node{n-1}`. Assim, todos os valores de
+n rodam nas mesmas máquinas, e o líder pausado e o nó medido não mudam.
+
+1. Faça os passos 1 a 4 nos 12 nós. No passo 3, use `check-net.sh 12`. O
+   `build-mu.sh` só é necessário nas 11 réplicas.
+2. Crie a chave no `node11`, como em [SSH do node3 para as réplicas](#ssh-do-node3-para-as-réplicas),
+   e copie a chave para as 11 réplicas. Faça isso a partir do seu computador,
+   com os endereços da aba *List View*:
+
+   ```bash
+   KEY='<linha do id_ed25519.pub do node11>'
+   for h in <endereço do node0> <endereço do node1> ... <endereço do node10>; do
+     ssh "$h" "echo '$KEY' >> ~/.ssh/authorized_keys"
+   done
+   ```
+
+3. No `node11`, confira as réplicas e faça uma rodada curta com as 11:
+
+   ```bash
+   cd /local/mu/crash-consensus/experiments/paper
+   NR_REPLICAS=11 ./preflight.sh
+   NR_REPLICAS=11 ./run-failover.sh 20
+   ```
+
+   O `NR_REPLICAS` escolhe as réplicas (`10.10.1.1..N`, padrão 3). O registro
+   usa o IP do próprio cliente, que vem do `/local/rdma.env`.
+
+4. Rode o sweep (umas 2h30 com os padrões: 5 valores de n × 3 repetições de
+   1000 rodadas). Use `tmux`, porque a sessão SSH pode cair:
+
+   ```bash
+   ./run-failover-sweep.sh
+   ```
+
+   Os valores de n se alternam (3, 5, …, 11, 3, 5, …). Variáveis: `SWEEP_N`
+   (padrão `3 5 7 9 11`), `REPS` (padrão 3) e o número de rodadas como
+   argumento. Os resultados ficam em `~/mu-results/failover-sweep`: uma pasta
+   `n<N>/rep<R>` para cada execução e um `summary.csv` com todas juntas
+   (`n,rep,metric,...,hard_resets`). Os detalhes estão no
+   [README dos scripts](https://github.com/joaogularte/mu/tree/master/crash-consensus/experiments/paper#scaling-the-number-of-replicas).
+
+> O novo líder espera a permissão de **todas** as outras réplicas, não de uma
+> maioria. Por isso, o tempo de `permissions` é o da réplica mais lenta entre
+> as n−1.
+
 ### 8. Rodar outros experimentos à mão
 
 Para os demais experimentos do README do Mu, o registro é iniciado à mão no

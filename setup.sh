@@ -96,7 +96,7 @@ for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
   [ -w "$g" ] && echo performance > "$g"
 done
 systemctl stop irqbalance 2>/dev/null || true
-systemctl stop memcached 2>/dev/null || true   # o registro do Mu é iniciado à mão no node3
+systemctl stop memcached 2>/dev/null || true   # o registro do Mu é iniciado no último nó (cliente)
 # eRPC (usado no experimento Liquibook) exige hugepages em todos os nós NUMA
 for h in /sys/devices/system/node/node*/hugepages/hugepages-2048kB/nr_hugepages; do
   echo 2048 > "$h"

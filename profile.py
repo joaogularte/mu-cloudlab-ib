@@ -35,7 +35,9 @@ pc = portal.Context()
 
 pc.defineParameter(
     "nodeCount", "Numero de nos", portal.ParameterType.INTEGER, 4,
-    longDescription="O artigo usa 4 maquinas: 3 replicas + 1 cliente/registro.")
+    longDescription="O artigo usa 4 maquinas: 3 replicas + 1 cliente/registro. "
+                    "O ultimo no e sempre o cliente; com 12 nos, o fail-over "
+                    "roda com 3, 5, 7, 9 e 11 replicas (run-failover-sweep.sh).")
 pc.defineParameter(
     "osImage", "Imagem de disco", portal.ParameterType.IMAGE,
     "urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU18-64-STD",
